@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environments
+protein_env/
+venv/
+env/
+ENV/
+.venv
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints
+
+# Model files (too large for GitHub)
+*.pkl
+*.h5
+*.hdf5
+*.joblib
+
+# Large data files
+*.zip
+*.csv
+*.xlsx
+*.xls
+
+# Logs
+*.log
+streamlit.log
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Large image files (generated outputs - keep source images)
+# Uncomment if you want to exclude generated visualization images
+# ml_outputs/*.png
+# images/*.png
+
+# Temporary files
+*.tmp
+*.temp
+
+# Streamlit
+.streamlit/
+
+# Environment variables
+.env
+.env.local
+
