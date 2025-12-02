@@ -253,21 +253,59 @@ def load_models():
     PROJECT_DIR = find_project_root()
     OUTPUT_DIR = PROJECT_DIR / "ml_outputs"
     
+    # Required model files
+    required_files = {
+        'rf_reg': OUTPUT_DIR / 'rf_reg.pkl',
+        'xgb_reg': OUTPUT_DIR / 'xgb_reg.pkl',
+        'scaler': OUTPUT_DIR / 'scaler.pkl'
+    }
+    
+    # Check if required files exist
+    missing_files = []
+    for name, file_path in required_files.items():
+        if not file_path.exists():
+            missing_files.append(f"{name} ({file_path.name})")
+    
+    if missing_files:
+        debug_info = f"""
+**Model files not found:**
+
+Missing required files:
+{chr(10).join(f'- {f}' for f in missing_files)}
+
+**Debugging Information:**
+- PROJECT_DIR: `{PROJECT_DIR}`
+- OUTPUT_DIR: `{OUTPUT_DIR}`
+- OUTPUT_DIR exists: `{OUTPUT_DIR.exists()}`
+- OUTPUT_DIR is directory: `{OUTPUT_DIR.is_dir() if OUTPUT_DIR.exists() else 'N/A'}`
+
+**File Status:**
+{chr(10).join(f'- {name}: {file_path.exists()}' for name, file_path in required_files.items())}
+
+**Solution:**
+1. Run `ProteinData.ipynb` to generate the model files
+2. Or run `save_models_as_pkl.py` to convert models from the notebook
+3. Verify the files are committed to your repository (for deployed apps)
+4. Check that files are in: `{OUTPUT_DIR}`
+"""
+        return None, False, debug_info
+    
     models = {}
     try:
-        models['rf_reg'] = joblib.load(OUTPUT_DIR / 'rf_reg.pkl')
-        models['xgb_reg'] = joblib.load(OUTPUT_DIR / 'xgb_reg.pkl')
-        models['scaler'] = joblib.load(OUTPUT_DIR / 'scaler.pkl')
+        models['rf_reg'] = joblib.load(required_files['rf_reg'])
+        models['xgb_reg'] = joblib.load(required_files['xgb_reg'])
+        models['scaler'] = joblib.load(required_files['scaler'])
         
         # Try to load Ridge, if not available, we'll train it
+        ridge_file = OUTPUT_DIR / 'ridge_reg.pkl'
         try:
-            models['ridge'] = joblib.load(OUTPUT_DIR / 'ridge_reg.pkl')
+            models['ridge'] = joblib.load(ridge_file)
         except:
             models['ridge'] = None
         
         return models, True, None
     except Exception as e:
-        return None, False, str(e)
+        return None, False, f"Error loading model files: {str(e)}"
 
 @st.cache_data
 def load_data():
@@ -275,12 +313,35 @@ def load_data():
     # Get the MainProject root directory
     PROJECT_DIR = find_project_root()
     OUTPUT_DIR = PROJECT_DIR / "ml_outputs"
+    feature_file = OUTPUT_DIR / 'feature_table_with_metadata.csv'
+    
+    # Check if file exists first
+    if not feature_file.exists():
+        # Provide helpful debugging information
+        debug_info = f"""
+**File not found:** `{feature_file}`
+
+**Debugging Information:**
+- PROJECT_DIR: `{PROJECT_DIR}`
+- OUTPUT_DIR: `{OUTPUT_DIR}`
+- File path: `{feature_file}`
+- OUTPUT_DIR exists: `{OUTPUT_DIR.exists()}`
+- OUTPUT_DIR is directory: `{OUTPUT_DIR.is_dir() if OUTPUT_DIR.exists() else 'N/A'}`
+
+**Solution:**
+1. Ensure `feature_table_with_metadata.csv` exists in the `ml_outputs/` directory
+2. Run `ProteinData.ipynb` to generate the file
+3. Verify the file is committed to your repository (for deployed apps)
+"""
+        return None, False, debug_info
     
     try:
-        df = pd.read_csv(OUTPUT_DIR / 'feature_table_with_metadata.csv')
+        df = pd.read_csv(feature_file)
+        if df.empty:
+            return None, False, "File exists but is empty"
         return df, True, None
     except Exception as e:
-        return None, False, str(e)
+        return None, False, f"Error reading file: {str(e)}"
 
 @st.cache_resource
 def train_ridge_model(data, scaler):
@@ -306,13 +367,21 @@ models, models_loaded, models_error = load_models()
 data, data_loaded, data_error = load_data()
 
 if not models_loaded:
-    st.error(f"⚠️ Models not loaded: {models_error}")
-    st.info("Please ensure models are trained and saved in ml_outputs/ directory.")
+    st.error("⚠️ Models not loaded")
+    if models_error:
+        with st.expander("🔍 View Error Details", expanded=True):
+            st.markdown(models_error)
+    st.info("💡 **Tip:** Run `ProteinData.ipynb` to generate the required model files (`rf_reg.pkl`, `xgb_reg.pkl`, and `scaler.pkl`).")
+    st.info("📝 **For deployed apps:** Ensure the model files are committed to your repository and pushed to GitHub.")
     st.stop()
 
 if not data_loaded:
-    st.error(f"⚠️ Data not loaded: {data_error}")
-    st.info("Please ensure feature_table_with_metadata.csv exists in ml_outputs/ directory.")
+    st.error("⚠️ Data not loaded")
+    if data_error:
+        with st.expander("🔍 View Error Details", expanded=True):
+            st.markdown(data_error)
+    st.info("💡 **Tip:** Run `ProteinData.ipynb` to generate `feature_table_with_metadata.csv` in the `ml_outputs/` directory.")
+    st.info("📝 **For deployed apps:** Ensure the file is committed to your repository and pushed to GitHub.")
     st.stop()
 
 # Train Ridge if needed (only if data is loaded)

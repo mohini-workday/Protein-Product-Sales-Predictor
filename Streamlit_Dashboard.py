@@ -85,25 +85,78 @@ OUTPUT_DIR = PROJECT_DIR / "ml_outputs"
 @st.cache_data
 def load_data():
     """Load feature table data"""
+    feature_file = OUTPUT_DIR / 'feature_table_with_metadata.csv'
+    
+    # Check if file exists first
+    if not feature_file.exists():
+        # Provide helpful debugging information
+        debug_info = f"""
+**File not found:** `{feature_file}`
+
+**Debugging Information:**
+- PROJECT_DIR: `{PROJECT_DIR}`
+- OUTPUT_DIR: `{OUTPUT_DIR}`
+- File path: `{feature_file}`
+- OUTPUT_DIR exists: `{OUTPUT_DIR.exists()}`
+- OUTPUT_DIR is directory: `{OUTPUT_DIR.is_dir() if OUTPUT_DIR.exists() else 'N/A'}`
+
+**Solution:**
+1. Ensure `feature_table_with_metadata.csv` exists in the `ml_outputs/` directory
+2. Run `ProteinData.ipynb` to generate the file
+3. Verify the file is committed to your repository (for deployed apps)
+"""
+        return None, False, debug_info
+    
     try:
-        df = pd.read_csv(OUTPUT_DIR / 'feature_table_with_metadata.csv')
+        df = pd.read_csv(feature_file)
+        if df.empty:
+            return None, False, "File exists but is empty"
         return df, True, None
-    except FileNotFoundError as e:
-        return None, False, f"File not found: {e}"
     except Exception as e:
-        return None, False, str(e)
+        return None, False, f"Error reading file: {str(e)}"
 
 @st.cache_resource
 def load_classification_model():
     """Load classification model and scaler"""
+    model_file = OUTPUT_DIR / 'rf_clf.pkl'
+    scaler_file = OUTPUT_DIR / 'scaler.pkl'
+    
+    # Check if files exist first
+    missing_files = []
+    if not model_file.exists():
+        missing_files.append(f"rf_clf.pkl (path: {model_file})")
+    if not scaler_file.exists():
+        missing_files.append(f"scaler.pkl (path: {scaler_file})")
+    
+    if missing_files:
+        debug_info = f"""
+**Model files not found:**
+
+Missing files:
+{chr(10).join(f'- {f}' for f in missing_files)}
+
+**Debugging Information:**
+- PROJECT_DIR: `{PROJECT_DIR}`
+- OUTPUT_DIR: `{OUTPUT_DIR}`
+- OUTPUT_DIR exists: `{OUTPUT_DIR.exists()}`
+- OUTPUT_DIR is directory: `{OUTPUT_DIR.is_dir() if OUTPUT_DIR.exists() else 'N/A'}`
+- Model file exists: `{model_file.exists()}`
+- Scaler file exists: `{scaler_file.exists()}`
+
+**Solution:**
+1. Run `ProteinData.ipynb` to generate the model files
+2. Or run `save_models_as_pkl.py` to convert models from the notebook
+3. Verify the files are committed to your repository (for deployed apps)
+4. Check that files are in: `{OUTPUT_DIR}`
+"""
+        return None, None, False, debug_info
+    
     try:
-        model = joblib.load(OUTPUT_DIR / 'rf_clf.pkl')
-        scaler = joblib.load(OUTPUT_DIR / 'scaler.pkl')
+        model = joblib.load(model_file)
+        scaler = joblib.load(scaler_file)
         return model, scaler, True, None
-    except FileNotFoundError as e:
-        return None, None, False, f"Model file not found: {e}"
     except Exception as e:
-        return None, None, False, str(e)
+        return None, None, False, f"Error loading model files: {str(e)}"
 
 # Load data and model
 data, data_loaded, data_error = load_data()
@@ -135,7 +188,9 @@ if model_loaded:
 else:
     st.sidebar.error("⚠️ Model not loaded")
     if model_error:
-        st.sidebar.caption(f"{model_error[:50]}...")
+        # Show a shortened version in sidebar, full details available in main area
+        error_preview = model_error.split('\n')[0] if model_error else "Check error details"
+        st.sidebar.caption(f"{error_preview[:60]}...")
 
 # ============================================================================
 # PAGE 1: HOME
@@ -183,7 +238,11 @@ if page == "🏠 Home":
         with col4:
             st.metric("Chart Files", "6")
     else:
-        st.warning("⚠️ Data not loaded. Please ensure feature_table_with_metadata.csv exists in ml_outputs/")
+        st.error("⚠️ Data not loaded")
+        if data_error:
+            with st.expander("🔍 View Error Details", expanded=True):
+                st.markdown(data_error)
+        st.info("💡 **Tip:** Run `ProteinData.ipynb` to generate `feature_table_with_metadata.csv` in the `ml_outputs/` directory.")
 
 # ============================================================================
 # PAGE 2: SAVED CHARTS
@@ -228,7 +287,10 @@ elif page == "📊 Interactive Charts":
     
     if not data_loaded:
         st.error("⚠️ Data not loaded. Cannot display interactive charts.")
-        st.info("Please ensure feature_table_with_metadata.csv exists in ml_outputs/")
+        if data_error:
+            with st.expander("🔍 View Error Details"):
+                st.markdown(data_error)
+        st.info("💡 **Tip:** Run `ProteinData.ipynb` to generate `feature_table_with_metadata.csv` in the `ml_outputs/` directory.")
     else:
         # Chart type selection
         chart_type = st.selectbox(
@@ -406,7 +468,10 @@ elif page == "📋 Data Explorer":
     
     if not data_loaded:
         st.error("⚠️ Data not loaded.")
-        st.info("Please ensure feature_table_with_metadata.csv exists in ml_outputs/")
+        if data_error:
+            with st.expander("🔍 View Error Details"):
+                st.markdown(data_error)
+        st.info("💡 **Tip:** Run `ProteinData.ipynb` to generate `feature_table_with_metadata.csv` in the `ml_outputs/` directory.")
     else:
         st.markdown("Explore the dataset interactively. Filter, sort, and analyze the data.")
         
@@ -475,8 +540,12 @@ elif page == "🧪 Testing":
     st.header("🧪 Product Label Classification Testing")
     
     if not model_loaded:
-        st.error("⚠️ Classification model not loaded. Please ensure rf_clf.pkl and scaler.pkl exist in ml_outputs/")
-        st.info("Run ProteinData.ipynb to generate the required model files.")
+        st.error("⚠️ Classification model not loaded")
+        if model_error:
+            with st.expander("🔍 View Error Details", expanded=True):
+                st.markdown(model_error)
+        st.info("💡 **Tip:** Run `ProteinData.ipynb` to generate the required model files (`rf_clf.pkl` and `scaler.pkl`).")
+        st.info("📝 **For deployed apps:** Ensure the model files are committed to your repository and pushed to GitHub.")
     else:
         st.markdown("""
         Upload a product label image to classify whether it would have **High Sales** or **Low Sales**.
