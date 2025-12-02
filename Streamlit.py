@@ -30,12 +30,26 @@ import os
 warnings.filterwarnings('ignore')
 
 # Set page config (must be first Streamlit command)
-st.set_page_config(
-    page_title="Protein Product Sales Predictor",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# This must be the first Streamlit command
+try:
+    st.set_page_config(
+        page_title="Protein Product Sales Predictor",
+        page_icon="📊",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+except Exception as e:
+    # Page config might already be set, continue
+    pass
+
+# ============================================================================
+# GUARANTEED INITIAL RENDER - Always show something immediately
+# ============================================================================
+# CRITICAL: This MUST execute before any conditional logic
+# Render main content FIRST, before sidebar or model loading
+st.title("📊 Protein Product Sales Predictor")
+st.write("**Loading application...** If you see this, the app is working!")
+st.markdown("---")
 
 # Custom CSS for enhanced styling
 st.markdown("""
@@ -265,12 +279,11 @@ def load_models():
             'rf_clf': joblib.load(OUTPUT_DIR / 'rf_clf.pkl'),
             'scaler': joblib.load(OUTPUT_DIR / 'scaler.pkl')
         }
-        return models, True
+        return models, True, None
     except FileNotFoundError as e:
-        return None, False
+        return None, False, str(e)
     except Exception as e:
-        st.error(f"Error loading models: {e}")
-        return None, False
+        return None, False, str(e)
 
 @st.cache_data
 def load_data():
@@ -280,19 +293,21 @@ def load_data():
     
     try:
         df = pd.read_csv(OUTPUT_DIR / 'feature_table_with_metadata.csv')
-        return df, True
-    except FileNotFoundError:
-        return None, False
+        return df, True, None
+    except FileNotFoundError as e:
+        return None, False, str(e)
     except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return None, False
+        return None, False, str(e)
 
-# Load models and data (non-blocking - load in background)
-# Note: These are cached, so they'll only load once
-models, models_loaded = load_models()
-data, data_loaded = load_data()
-
-# ResNet loading is deferred - only load when needed (it's slow and can block)
+# Initialize variables - will be loaded when needed
+# CRITICAL: Don't load models/data here - it blocks UI rendering!
+# Load them AFTER initial UI is shown
+models = None
+models_loaded = False
+models_error = None
+data = None
+data_loaded = False
+data_error = None
 resnet_model = None
 
 # ============================================================================
@@ -314,34 +329,80 @@ def get_feature_category(feature_name):
         return 'Other'
 
 # ============================================================================
-# SIDEBAR NAVIGATION
+# SIDEBAR NAVIGATION (Render sidebar AFTER main content starts)
 # ============================================================================
-st.sidebar.title("📊 Navigation")
+try:
+    st.sidebar.title("📊 Navigation")
+    st.sidebar.markdown("---")
+
+    page = st.sidebar.radio(
+        "Select Page",
+        ["🏠 Home", "🔮 Model Testing", "📈 Feature Analysis", "🎯 Model Performance", 
+         "📊 Interactive Visualizations", "🎨 Feature Extraction Demo", "📋 Data Explorer"]
+    )
+except Exception as e:
+    st.sidebar.error(f"Error in sidebar: {e}")
+    page = "🏠 Home"  # Default to home page
+
+# Load models and data AFTER sidebar is set up (non-blocking with status)
+# Use try-except but don't block rendering
+try:
+    models, models_loaded, models_error = load_models()
+except Exception as e:
+    models = None
+    models_loaded = False
+    models_error = str(e)
+
+try:
+    data, data_loaded, data_error = load_data()
+except Exception as e:
+    data = None
+    data_loaded = False
+    data_error = str(e)
+
+# Show status in sidebar (non-blocking)
 st.sidebar.markdown("---")
+st.sidebar.write("**Status:**")
+if models_loaded:
+    st.sidebar.success("✅ Models loaded")
+else:
+    st.sidebar.error("⚠️ Models not loaded")
+    if models_error:
+        st.sidebar.text(f"Error: {models_error[:50]}...")
+        
+if data_loaded:
+    st.sidebar.success("✅ Data loaded")
+else:
+    st.sidebar.error("⚠️ Data not loaded")
+    if data_error:
+        st.sidebar.text(f"Error: {data_error[:50]}...")
 
-# Show loading status in sidebar
-if not models_loaded:
-    st.sidebar.warning("⚠️ Models not loaded")
-    st.sidebar.info("Run ProteinData.ipynb to generate models")
-if not data_loaded:
-    st.sidebar.warning("⚠️ Data not loaded")
-    st.sidebar.info("Run ProteinData.ipynb to generate data")
+# Ensure page variable exists (critical for rendering)
+try:
+    if 'page' not in locals() or page is None:
+        page = "🏠 Home"
+except:
+    page = "🏠 Home"
 
-page = st.sidebar.radio(
-    "Select Page",
-    ["🏠 Home", "🔮 Model Testing", "📈 Feature Analysis", "🎯 Model Performance", 
-     "📊 Interactive Visualizations", "🎨 Feature Extraction Demo", "📋 Data Explorer"]
-)
-
-# Show immediate feedback
-if page == "🏠 Home" and not data_loaded and not models_loaded:
-    st.info("🔄 Loading application... Please wait a moment.")
+# Title already shown at top, just add separator for page content
+st.markdown("---")
 
 # ============================================================================
 # PAGE 1: HOME / PROJECT DESCRIPTION
 # ============================================================================
 if page == "🏠 Home":
-    st.markdown('<h1 class="main-header">Protein Product Sales Predictor</h1>', unsafe_allow_html=True)
+    # Title already shown above, just add separator
+    st.markdown("---")
+    
+    # Show status immediately
+    if not models_loaded or not data_loaded:
+        st.warning("⚠️ **Application Status:** Some resources failed to load. Please check the sidebar for details.")
+        if models_error:
+            st.error(f"**Model Loading Error:** {models_error}")
+        if data_error:
+            st.error(f"**Data Loading Error:** {data_error}")
+        st.info("💡 **Troubleshooting:** Ensure all model files (.pkl) and data files exist in the `ml_outputs/` directory.")
+        st.markdown("---")
     
     st.markdown("---")
     
@@ -422,48 +483,63 @@ if page == "🏠 Home":
     
     # Dataset Info
     if data_loaded:
-        st.header("📁 Dataset Information")
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.metric("Total Products", len(data))
-        
-        with col2:
-            feature_count = len([c for c in data.columns if c.startswith(('mean_','std_','color_feat_','lbp_','emb_'))])
-            st.metric("Features Extracted", feature_count)
-        
-        with col3:
-            avg_sales = data['Sale'].mean() if 'Sale' in data.columns else 0
-            st.metric("Average Sales", f"${avg_sales:,.0f}")
-        
-        with col4:
-            st.metric("Models Trained", "6")
-        
-        # Quick Stats
-        if 'Sale' in data.columns:
-            st.markdown("---")
-            st.header("📊 Quick Statistics")
-            col1, col2 = st.columns(2)
+        try:
+            st.header("📁 Dataset Information")
             
-            with col1:
-                try:
-                    fig = px.histogram(data, x='Sale', nbins=20, 
-                                      title='Sales Distribution',
-                                      labels={'Sale': 'Sales ($)', 'count': 'Number of Products'})
-                    fig.update_layout(height=400)
-                    st.plotly_chart(fig, use_container_width=True)
-                except Exception as e:
-                    st.error(f"Error creating histogram: {e}")
-            
-            with col2:
-                st.subheader("Sales Summary")
-                st.metric("Mean", f"${data['Sale'].mean():,.0f}")
-                st.metric("Median", f"${data['Sale'].median():,.0f}")
-                st.metric("Std Dev", f"${data['Sale'].std():,.0f}")
-                st.metric("Min", f"${data['Sale'].min():,.0f}")
-                st.metric("Max", f"${data['Sale'].max():,.0f}")
+            if data is None or len(data) == 0:
+                st.warning("⚠️ Data loaded but is empty. Please check the data file.")
+            else:
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Total Products", len(data))
+                
+                with col2:
+                    feature_count = len([c for c in data.columns if c.startswith(('mean_','std_','color_feat_','lbp_','emb_'))])
+                    st.metric("Features Extracted", feature_count)
+                
+                with col3:
+                    avg_sales = data['Sale'].mean() if 'Sale' in data.columns else 0
+                    st.metric("Average Sales", f"${avg_sales:,.0f}")
+                
+                with col4:
+                    st.metric("Models Trained", "6")
+                
+                # Quick Stats
+                if 'Sale' in data.columns:
+                    st.markdown("---")
+                    st.header("📊 Quick Statistics")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        try:
+                            fig = px.histogram(data, x='Sale', nbins=20, 
+                                              title='Sales Distribution',
+                                              labels={'Sale': 'Sales ($)', 'count': 'Number of Products'})
+                            fig.update_layout(height=400)
+                            st.plotly_chart(fig, use_container_width=True)
+                        except Exception as e:
+                            st.error(f"Error creating histogram: {e}")
+                            st.exception(e)
+                    
+                    with col2:
+                        try:
+                            st.subheader("Sales Summary")
+                            st.metric("Mean", f"${data['Sale'].mean():,.0f}")
+                            st.metric("Median", f"${data['Sale'].median():,.0f}")
+                            st.metric("Std Dev", f"${data['Sale'].std():,.0f}")
+                            st.metric("Min", f"${data['Sale'].min():,.0f}")
+                            st.metric("Max", f"${data['Sale'].max():,.0f}")
+                        except Exception as e:
+                            st.error(f"Error calculating statistics: {e}")
+                            st.exception(e)
+        except Exception as e:
+            st.error(f"Error displaying dataset information: {e}")
+            st.exception(e)
     else:
         st.warning("⚠️ Data not loaded. Please ensure feature_table_with_metadata.csv exists in ml_outputs directory.")
+        if data_error:
+            st.error(f"**Error details:** {data_error}")
 
 # ============================================================================
 # PAGE 2: MODEL TESTING
@@ -1134,22 +1210,30 @@ elif page == "📋 Data Explorer":
 # ============================================================================
 # FOOTER
 # ============================================================================
-st.sidebar.markdown("---")
-st.sidebar.markdown("""
-### 📚 About
-**Protein Product Sales Predictor**
+try:
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("""
+    ### 📚 About
+    **Protein Product Sales Predictor**
 
-A machine learning application that predicts product sales based on visual features extracted from product label images.
+    A machine learning application that predicts product sales based on visual features extracted from product label images.
 
-**Author**: Mohini  
-**Project**: ML PostGrad - Main Project
+    **Author**: Mohini  
+    **Project**: ML PostGrad - Main Project
 
-### 🚀 Quick Start
-1. **Home**: Overview and methodology
-2. **Model Testing**: Upload image for prediction
-3. **Feature Analysis**: Explore feature importance
-4. **Model Performance**: Compare model metrics
-5. **Visualizations**: Interactive charts
-6. **Feature Extraction**: See how features are extracted
-7. **Data Explorer**: Browse the dataset
-""")
+    ### 🚀 Quick Start
+    1. **Home**: Overview and methodology
+    2. **Model Testing**: Upload image for prediction
+    3. **Feature Analysis**: Explore feature importance
+    4. **Model Performance**: Compare model metrics
+    5. **Visualizations**: Interactive charts
+    6. **Feature Extraction**: See how features are extracted
+    7. **Data Explorer**: Browse the dataset
+    """)
+except Exception as e:
+    st.sidebar.error(f"Error in footer: {e}")
+
+# ============================================================================
+# END OF SCRIPT
+# ============================================================================
+# If we reach here, the script executed successfully

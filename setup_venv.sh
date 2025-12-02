@@ -24,6 +24,46 @@ pip install -r requirements_protein.txt --quiet
 echo "Dependencies installed!"
 echo ""
 
+# Check if models need to be trained
+echo ""
+echo "======================================"
+echo " Training Models"
+echo "======================================"
+echo ""
+
+MODELS_DIR="ml_outputs"
+MODELS_EXIST=true
+
+if [ ! -f "$MODELS_DIR/rf_reg.pkl" ] || [ ! -f "$MODELS_DIR/xgb_reg.pkl" ] || [ ! -f "$MODELS_DIR/rf_clf.pkl" ] || [ ! -f "$MODELS_DIR/scaler.pkl" ]; then
+    MODELS_EXIST=false
+fi
+
+if [ "$MODELS_EXIST" = false ]; then
+    echo "Models not found. Training all three models..."
+    echo "This may take several minutes..."
+    echo ""
+    
+    # Execute the notebook to train models
+    python -m jupyter nbconvert --to notebook --execute ProteinData.ipynb --output ProteinData_executed.ipynb --ExecutePreprocessor.timeout=3600
+    
+    if [ $? -eq 0 ]; then
+        echo ""
+        echo "✅ Models trained successfully!"
+        echo ""
+        echo "Converting models to .pkl format for Streamlit..."
+        python save_models_as_pkl.py
+        echo ""
+    else
+        echo ""
+        echo "⚠️  Warning: Model training encountered issues. Continuing anyway..."
+        echo ""
+    fi
+else
+    echo "✅ Models already exist. Skipping training."
+    echo "To retrain models, delete .pkl files from ml_outputs/ directory."
+    echo ""
+fi
+
 echo ""
 echo "======================================"
 echo " Setup complete!"
@@ -44,7 +84,7 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 # Start Streamlit server in background
-echo "Starting Streamlit UI on http://localhost:8501..."
+echo "Starting Streamlit UI "
 protein_env/bin/streamlit run Streamlit.py --server.headless true &
 STREAMLIT_PID=$!
 
@@ -56,7 +96,7 @@ echo "======================================"
 echo "Application is running!"
 echo "======================================"
 echo ""
-echo "📱 Streamlit UI: http://localhost:8501"
+echo "📱 Streamlit UI: http://localhost:8504"
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
