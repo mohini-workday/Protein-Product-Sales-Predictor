@@ -49,8 +49,9 @@ jupyter notebook ProteinData.ipynb
 ### 3. Run Streamlit App
 
 ```bash
-streamlit run Streamlit.py
+streamlit run Streamlit_Dashboard.py
 ```
+Or Use the deployed app - https://mohini-workday-protein-product-sales-streamlit-dashboard-hvldbs.streamlit.app/
 
 Or use the setup script:
 
