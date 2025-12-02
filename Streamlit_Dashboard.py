@@ -203,7 +203,9 @@ else:
 if models_loaded:
     available_models = [name for name in ['rf_clf', 'rf_reg', 'xgb_reg'] if name in models]
     model_count = len(available_models)
+    scaler_status = "✅" if scaler else "❌"
     st.sidebar.success(f"✅ {model_count} model(s) loaded")
+    st.sidebar.info(f"{scaler_status} Scaler: {'Loaded' if scaler else 'Missing'}")
     if model_warnings:
         st.sidebar.warning(f"⚠️ {model_warnings[:40]}...")
 else:
@@ -865,9 +867,47 @@ elif page == "🧪 Testing":
                     
                     # Feature summary
                     st.markdown("---")
-                    with st.expander("🔍 View Extracted Features"):
-                        st.json({k: round(v, 4) for k, v in list(features_dict.items())[:20]})
-                        st.caption(f"Total features extracted: {len(features_dict)}")
+                    st.subheader("🔍 Feature Analysis")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        with st.expander("📋 View Raw Features"):
+                            st.json({k: round(v, 4) for k, v in list(features_dict.items())[:20]})
+                            st.caption(f"Total features extracted: {len(features_dict)}")
+                    
+                    with col2:
+                        with st.expander("📊 View Scaled Features (After Scaler)"):
+                            # Show scaled features
+                            scaled_features_dict = {keep_cols[i]: round(X_scaled[0][i], 4) for i in range(min(20, len(keep_cols)))}
+                            st.json(scaled_features_dict)
+                            st.caption(f"Features scaled using StandardScaler (scaler.pkl)")
+                            st.info("💡 Features are normalized (mean=0, std=1) before model prediction")
+                    
+                    # Scaler information
+                    st.markdown("---")
+                    with st.expander("⚙️ Scaler Information"):
+                        st.markdown("""
+                        **StandardScaler (scaler.pkl)**
+                        
+                        The scaler normalizes features before feeding them to the models:
+                        - **Mean normalization**: Centers features around 0
+                        - **Standard deviation scaling**: Scales features to unit variance
+                        - **Formula**: `scaled = (value - mean) / std`
+                        
+                        This ensures all features are on the same scale, which is important for:
+                        - Linear models (Ridge, Logistic Regression)
+                        - Neural networks
+                        - Better model performance and convergence
+                        """)
+                        
+                        if scaler:
+                            st.success("✅ Scaler loaded successfully")
+                            st.caption(f"Scaler type: {type(scaler).__name__}")
+                            if hasattr(scaler, 'mean_') and scaler.mean_ is not None:
+                                st.caption(f"Number of features scaled: {len(scaler.mean_)}")
+                        else:
+                            st.error("❌ Scaler not available")
                     
                 except Exception as e:
                     st.error(f"Error processing image: {e}")
