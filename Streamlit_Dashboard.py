@@ -40,7 +40,46 @@ st.write("**Visualization Dashboard** - Charts and analysis from ProteinData.ipy
 # ============================================================================
 # LOAD DATA AND MODEL
 # ============================================================================
-PROJECT_DIR = Path("/Users/mohini.gangaram/Desktop/MLPostGrad/Sem3/MainProject")
+def find_project_root(start_path=None):
+    """Find the MainProject directory by walking up from start_path.
+    Works in both local development and deployed environments (Streamlit Cloud).
+    """
+    if start_path is None:
+        # Try to get the script's directory, fallback to current working directory
+        try:
+            start_path = Path(__file__).parent.resolve()
+        except NameError:
+            # __file__ not available (e.g., in some deployment environments like Streamlit Cloud)
+            start_path = Path.cwd()
+    else:
+        start_path = Path(start_path).resolve()
+    
+    # First, check if we're already in a directory with ml_outputs
+    # This is the most reliable indicator and works in deployment
+    test_path = start_path / "ml_outputs"
+    if test_path.exists():
+        return start_path
+    
+    # Check parent directories for ml_outputs (more reliable than directory name)
+    current = start_path
+    while current != current.parent:
+        test_path = current / "ml_outputs"
+        if test_path.exists():
+            return current
+        current = current.parent
+    
+    # Fallback: Check if directory is named "MainProject"
+    current = start_path
+    while current != current.parent:
+        if current.name == "MainProject":
+            return current
+        current = current.parent
+    
+    # Final fallback: return the original start_path
+    return start_path
+
+# Get the MainProject root directory
+PROJECT_DIR = find_project_root()
 OUTPUT_DIR = PROJECT_DIR / "ml_outputs"
 
 @st.cache_data
@@ -177,6 +216,9 @@ elif page == "📈 Saved Charts":
         else:
             st.warning(f"Chart file not found: {filename}")
             st.info(f"Expected location: {chart_path}")
+            # Debug information (only shown in development)
+            if st.sidebar.checkbox("Show debug info", key=f"debug_{filename}"):
+                st.code(f"PROJECT_DIR: {PROJECT_DIR}\nOUTPUT_DIR: {OUTPUT_DIR}\nChart path: {chart_path}")
 
 # ============================================================================
 # PAGE 3: INTERACTIVE CHARTS

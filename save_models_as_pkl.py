@@ -8,7 +8,25 @@ import sys
 from pathlib import Path
 import joblib
 
-PROJECT_DIR = Path("/Users/mohini.gangaram/Desktop/MLPostGrad/Sem3/MainProject")
+def find_project_root(start_path=None):
+    """Find the MainProject directory by walking up from start_path"""
+    if start_path is None:
+        start_path = Path(__file__).parent.resolve()
+    else:
+        start_path = Path(start_path).resolve()
+    
+    current = start_path
+    while current != current.parent:
+        # Check if this directory is named "MainProject"
+        if current.name == "MainProject":
+            return current
+        current = current.parent
+    
+    # If not found, return the original start_path as fallback
+    return start_path
+
+# Get the MainProject root directory
+PROJECT_DIR = find_project_root()
 OUTPUT_DIR = PROJECT_DIR / "ml_outputs"
 
 def save_models_as_pkl():

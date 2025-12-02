@@ -229,10 +229,28 @@ def extract_all_features(img_arr, resnet_model=None):
 # LOAD MODELS AND DATA
 # ============================================================================
 
+def find_project_root(start_path=None):
+    """Find the MainProject directory by walking up from start_path"""
+    if start_path is None:
+        start_path = Path(__file__).parent.resolve()
+    else:
+        start_path = Path(start_path).resolve()
+    
+    current = start_path
+    while current != current.parent:
+        # Check if this directory is named "MainProject"
+        if current.name == "MainProject":
+            return current
+        current = current.parent
+    
+    # If not found, return the original start_path as fallback
+    return start_path
+
 @st.cache_resource
 def load_models():
     """Load trained models and scaler"""
-    PROJECT_DIR = Path("/Users/mohini.gangaram/Desktop/MLPostGrad/Sem3/MainProject")
+    # Get the MainProject root directory
+    PROJECT_DIR = find_project_root()
     OUTPUT_DIR = PROJECT_DIR / "ml_outputs"
     
     models = {}
@@ -254,7 +272,8 @@ def load_models():
 @st.cache_data
 def load_data():
     """Load feature table and processed data"""
-    PROJECT_DIR = Path("/Users/mohini.gangaram/Desktop/MLPostGrad/Sem3/MainProject")
+    # Get the MainProject root directory
+    PROJECT_DIR = find_project_root()
     OUTPUT_DIR = PROJECT_DIR / "ml_outputs"
     
     try:
