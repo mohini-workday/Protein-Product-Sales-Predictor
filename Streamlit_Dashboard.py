@@ -4,6 +4,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-GUI backend for Streamlit Cloud
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
@@ -14,6 +16,7 @@ import warnings
 import joblib
 import io
 import cv2
+# cv2 should work with opencv-python-headless
 from sklearn.cluster import KMeans
 from skimage.color import rgb2gray
 from skimage.feature import hog, local_binary_pattern
@@ -85,99 +88,29 @@ OUTPUT_DIR = PROJECT_DIR / "ml_outputs"
 @st.cache_data
 def load_data():
     """Load feature table data"""
-    feature_file = OUTPUT_DIR / 'feature_table_with_metadata.csv'
-    
-    # Check if file exists first
-    if not feature_file.exists():
-        # Provide helpful debugging information
-        debug_info = f"""
-**File not found:** `{feature_file}`
-
-**Debugging Information:**
-- PROJECT_DIR: `{PROJECT_DIR}`
-- OUTPUT_DIR: `{OUTPUT_DIR}`
-- File path: `{feature_file}`
-- OUTPUT_DIR exists: `{OUTPUT_DIR.exists()}`
-- OUTPUT_DIR is directory: `{OUTPUT_DIR.is_dir() if OUTPUT_DIR.exists() else 'N/A'}`
-
-**Solution:**
-1. Ensure `feature_table_with_metadata.csv` exists in the `ml_outputs/` directory
-2. Run `ProteinData.ipynb` to generate the file
-3. Verify the file is committed to your repository (for deployed apps)
-"""
-        return None, False, debug_info
-    
     try:
-        df = pd.read_csv(feature_file)
-        if df.empty:
-            return None, False, "File exists but is empty"
+        df = pd.read_csv(OUTPUT_DIR / 'feature_table_with_metadata.csv')
         return df, True, None
+    except FileNotFoundError as e:
+        return None, False, f"File not found: {e}"
     except Exception as e:
-        return None, False, f"Error reading file: {str(e)}"
+        return None, False, str(e)
 
 @st.cache_resource
-def load_all_models():
-    """Load all available models and scaler"""
-    scaler_file = OUTPUT_DIR / 'scaler.pkl'
-    
-    models = {}
-    missing_files = []
-    
-    # Check scaler first (required for all models)
-    if not scaler_file.exists():
-        missing_files.append(f"scaler.pkl (path: {scaler_file})")
-    else:
-        try:
-            models['scaler'] = joblib.load(scaler_file)
-        except Exception as e:
-            return {}, False, f"Error loading scaler: {str(e)}"
-    
-    # Try to load each model
-    model_files = {
-        'rf_clf': OUTPUT_DIR / 'rf_clf.pkl',
-        'rf_reg': OUTPUT_DIR / 'rf_reg.pkl',
-        'xgb_reg': OUTPUT_DIR / 'xgb_reg.pkl'
-    }
-    
-    for model_name, model_file in model_files.items():
-        if model_file.exists():
-            try:
-                models[model_name] = joblib.load(model_file)
-            except Exception as e:
-                # Continue loading other models even if one fails
-                missing_files.append(f"{model_name}.pkl (error: {str(e)})")
-        else:
-            missing_files.append(f"{model_name}.pkl (not found)")
-    
-    if not models.get('scaler'):
-        debug_info = f"""
-**Scaler file not found:**
+def load_classification_model():
+    """Load classification model and scaler"""
+    try:
+        model = joblib.load(OUTPUT_DIR / 'rf_clf.pkl')
+        scaler = joblib.load(OUTPUT_DIR / 'scaler.pkl')
+        return model, scaler, True, None
+    except FileNotFoundError as e:
+        return None, None, False, f"Model file not found: {e}"
+    except Exception as e:
+        return None, None, False, str(e)
 
-Missing file: `scaler.pkl` (path: {scaler_file})
-
-**Debugging Information:**
-- PROJECT_DIR: `{PROJECT_DIR}`
-- OUTPUT_DIR: `{OUTPUT_DIR}`
-- OUTPUT_DIR exists: `{OUTPUT_DIR.exists()}`
-
-**Solution:**
-1. Run `ProteinData.ipynb` to generate the model files
-2. Or run `save_models_as_pkl.py` to convert models from the notebook
-3. Verify the files are committed to your repository (for deployed apps)
-"""
-        return {}, False, debug_info
-    
-    # Return models dict, success status, and any warnings
-    warnings = None
-    if missing_files and len(models) > 1:  # Only warn if scaler is loaded but some models are missing
-        warnings = f"Some models not available: {', '.join(missing_files)}"
-    
-    return models, True, warnings
-
-# Load data and models
+# Load data and model
 data, data_loaded, data_error = load_data()
-models, models_loaded, model_warnings = load_all_models()
-scaler = models.get('scaler') if models_loaded else None
+clf_model, scaler, model_loaded, model_error = load_classification_model()
 
 # ============================================================================
 # SIDEBAR NAVIGATION
@@ -200,17 +133,12 @@ else:
     if data_error:
         st.sidebar.caption(f"{data_error[:50]}...")
 
-if models_loaded:
-    available_models = [name for name in ['rf_clf', 'rf_reg', 'xgb_reg'] if name in models]
-    model_count = len(available_models)
-    scaler_status = "✅" if scaler else "❌"
-    st.sidebar.success(f"✅ {model_count} model(s) loaded")
-    st.sidebar.info(f"{scaler_status} Scaler: {'Loaded' if scaler else 'Missing'}")
-    if model_warnings:
-        st.sidebar.warning(f"⚠️ {model_warnings[:40]}...")
+if model_loaded:
+    st.sidebar.success("✅ Classification model loaded")
 else:
-    st.sidebar.error("⚠️ Models not loaded")
-    st.sidebar.caption("Check error details in Testing page")
+    st.sidebar.error("⚠️ Model not loaded")
+    if model_error:
+        st.sidebar.caption(f"{model_error[:50]}...")
 
 # ============================================================================
 # PAGE 1: HOME
@@ -258,11 +186,7 @@ if page == "🏠 Home":
         with col4:
             st.metric("Chart Files", "6")
     else:
-        st.error("⚠️ Data not loaded")
-        if data_error:
-            with st.expander("🔍 View Error Details", expanded=True):
-                st.markdown(data_error)
-        st.info("💡 **Tip:** Run `ProteinData.ipynb` to generate `feature_table_with_metadata.csv` in the `ml_outputs/` directory.")
+        st.warning("⚠️ Data not loaded. Please ensure feature_table_with_metadata.csv exists in ml_outputs/")
 
 # ============================================================================
 # PAGE 2: SAVED CHARTS
@@ -307,10 +231,7 @@ elif page == "📊 Interactive Charts":
     
     if not data_loaded:
         st.error("⚠️ Data not loaded. Cannot display interactive charts.")
-        if data_error:
-            with st.expander("🔍 View Error Details"):
-                st.markdown(data_error)
-        st.info("💡 **Tip:** Run `ProteinData.ipynb` to generate `feature_table_with_metadata.csv` in the `ml_outputs/` directory.")
+        st.info("Please ensure feature_table_with_metadata.csv exists in ml_outputs/")
     else:
         # Chart type selection
         chart_type = st.selectbox(
@@ -488,10 +409,7 @@ elif page == "📋 Data Explorer":
     
     if not data_loaded:
         st.error("⚠️ Data not loaded.")
-        if data_error:
-            with st.expander("🔍 View Error Details"):
-                st.markdown(data_error)
-        st.info("💡 **Tip:** Run `ProteinData.ipynb` to generate `feature_table_with_metadata.csv` in the `ml_outputs/` directory.")
+        st.info("Please ensure feature_table_with_metadata.csv exists in ml_outputs/")
     else:
         st.markdown("Explore the dataset interactively. Filter, sort, and analyze the data.")
         
@@ -557,62 +475,22 @@ elif page == "📋 Data Explorer":
 # PAGE 5: TESTING (Image Classification)
 # ============================================================================
 elif page == "🧪 Testing":
-    st.header("🧪 Product Label Testing & Prediction")
+    st.header("🧪 Product Label Classification Testing")
     
-    if not models_loaded or not scaler:
-        st.error("⚠️ Models not loaded")
-        st.info("💡 **Tip:** Run `ProteinData.ipynb` to generate the required model files (`rf_clf.pkl`, `rf_reg.pkl`, `xgb_reg.pkl`, and `scaler.pkl`).")
-        st.info("📝 **For deployed apps:** Ensure the model files are committed to your repository and pushed to GitHub.")
+    if not model_loaded:
+        st.error("⚠️ Classification model not loaded. Please ensure rf_clf.pkl and scaler.pkl exist in ml_outputs/")
+        st.info("Run ProteinData.ipynb to generate the required model files.")
     else:
         st.markdown("""
-        Upload a product label image and select a model to predict sales performance.
-        The application will extract visual features from the image and make a prediction.
+        Upload a product label image to classify whether it would have **High Sales** or **Low Sales**.
+        The model will extract visual features from the image and make a prediction.
         """)
-        
-        # Model selection
-        available_models_list = []
-        model_descriptions = {
-            'rf_clf': 'Random Forest Classifier - Predicts High/Low Sales Category',
-            'rf_reg': 'Random Forest Regressor - Predicts Sales Value',
-            'xgb_reg': 'XGBoost Regressor - Predicts Sales Value (Advanced)'
-        }
-        
-        for model_name in ['rf_clf', 'rf_reg', 'xgb_reg']:
-            if model_name in models:
-                available_models_list.append(model_name)
-        
-        if not available_models_list:
-            st.error("⚠️ No models available. Please ensure model files exist in ml_outputs/")
-            st.stop()
-        
-        # Model selection dropdown
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            selected_model_name = st.selectbox(
-                "Select Model",
-                options=available_models_list,
-                format_func=lambda x: {
-                    'rf_clf': '🎯 Random Forest Classifier (High/Low Sales)',
-                    'rf_reg': '📊 Random Forest Regressor (Sales Value)',
-                    'xgb_reg': '🚀 XGBoost Regressor (Sales Value)'
-                }.get(x, x),
-                help="Choose which model to use for prediction"
-            )
-        
-        with col2:
-            st.markdown("### Model Info")
-            st.caption(model_descriptions.get(selected_model_name, "Model description"))
-        
-        selected_model = models[selected_model_name]
-        is_classification = selected_model_name == 'rf_clf'
-        
-        st.markdown("---")
         
         # Image upload
         uploaded_file = st.file_uploader(
             "Choose a product label image (PNG, JPG, JPEG)",
             type=['png', 'jpg', 'jpeg'],
-            help="Upload a product label image for prediction"
+            help="Upload a product label image for classification"
         )
         
         if uploaded_file is not None:
@@ -734,180 +612,72 @@ elif page == "🧪 Testing":
                     X_scaled = scaler.transform(X_new)
                     
                     progress_bar.progress(90)
-                    status_text.text(f"Running {selected_model_name} prediction...")
+                    status_text.text("Running classification...")
                     
-                    # Make prediction based on model type
-                    if is_classification:
-                        prediction = selected_model.predict(X_scaled)[0]
-                        probabilities = selected_model.predict_proba(X_scaled)[0]
-                    else:
-                        prediction = selected_model.predict(X_scaled)[0]
-                        probabilities = None
+                    # Make prediction
+                    prediction = clf_model.predict(X_scaled)[0]
+                    probabilities = clf_model.predict_proba(X_scaled)[0]
                     
                     progress_bar.progress(100)
                     status_text.text("✅ Analysis complete!")
                     
                     # Display results
                     st.markdown("---")
-                    st.subheader("📊 Prediction Results")
+                    st.subheader("📊 Classification Results")
                     
-                    if is_classification:
-                        # Classification results
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            sales_category = "High Sales" if prediction == 1 else "Low Sales"
-                            category_color = "🟢" if prediction == 1 else "🔴"
-                            st.metric(
-                                "Predicted Category",
-                                f"{category_color} {sales_category}",
-                                delta=f"{probabilities[prediction]*100:.1f}% confidence"
-                            )
-                        
-                        with col2:
-                            high_prob = probabilities[1] * 100
-                            st.metric(
-                                "High Sales Probability",
-                                f"{high_prob:.1f}%"
-                            )
-                        
-                        with col3:
-                            low_prob = probabilities[0] * 100
-                            st.metric(
-                                "Low Sales Probability",
-                                f"{low_prob:.1f}%"
-                            )
-                        
-                        # Probability visualization
-                        st.markdown("---")
-                        st.subheader("📈 Prediction Confidence")
-                        
-                        prob_data = pd.DataFrame({
-                            'Category': ['Low Sales', 'High Sales'],
-                            'Probability': [probabilities[0] * 100, probabilities[1] * 100]
-                        })
-                        
-                        fig = px.bar(
-                            prob_data,
-                            x='Category',
-                            y='Probability',
-                            title='Sales Category Probabilities',
-                            color='Category',
-                            color_discrete_map={'Low Sales': '#FF6B6B', 'High Sales': '#4ECDC4'},
-                            text='Probability',
-                            texttemplate='%{text:.1f}%'
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        sales_category = "High Sales" if prediction == 1 else "Low Sales"
+                        category_color = "🟢" if prediction == 1 else "🔴"
+                        st.metric(
+                            "Predicted Category",
+                            f"{category_color} {sales_category}",
+                            delta=f"{probabilities[prediction]*100:.1f}% confidence"
                         )
-                        fig.update_layout(height=400, yaxis_title='Probability (%)', yaxis_range=[0, 100])
-                        fig.update_traces(textposition='outside')
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        # Regression results
-                        col1, col2, col3 = st.columns(3)
-                        
-                        with col1:
-                            st.metric(
-                                "Predicted Sales",
-                                f"${prediction:,.0f}",
-                                help="Predicted sales value based on image features"
-                            )
-                        
-                        with col2:
-                            # Show model name
-                            model_display_name = {
-                                'rf_reg': 'Random Forest Regressor',
-                                'xgb_reg': 'XGBoost Regressor'
-                            }.get(selected_model_name, selected_model_name)
-                            st.metric(
-                                "Model Used",
-                                model_display_name
-                            )
-                        
-                        with col3:
-                            # Show if prediction is above/below average (if data is loaded)
-                            if data_loaded and 'Sale' in data.columns:
-                                avg_sales = data['Sale'].mean()
-                                diff = prediction - avg_sales
-                                diff_pct = (diff / avg_sales * 100) if avg_sales > 0 else 0
-                                st.metric(
-                                    "vs Average",
-                                    f"{diff_pct:+.1f}%",
-                                    delta=f"${diff:+,.0f}"
-                                )
-                        
-                        # Sales value visualization
-                        st.markdown("---")
-                        st.subheader("📈 Sales Prediction")
-                        
-                        # Create a comparison chart if data is available
-                        if data_loaded and 'Sale' in data.columns:
-                            comparison_data = pd.DataFrame({
-                                'Type': ['Predicted', 'Average (Training Data)'],
-                                'Sales': [prediction, data['Sale'].mean()]
-                            })
-                            
-                            fig = px.bar(
-                                comparison_data,
-                                x='Type',
-                                y='Sales',
-                                title='Predicted Sales vs Average Training Sales',
-                                color='Type',
-                                color_discrete_map={
-                                    'Predicted': '#4ECDC4',
-                                    'Average (Training Data)': '#95A5A6'
-                                },
-                                text='Sales',
-                                texttemplate='$%{text:,.0f}'
-                            )
-                            fig.update_layout(height=400, yaxis_title='Sales ($)')
-                            fig.update_traces(textposition='outside')
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            # Simple display if no comparison data
-                            st.info(f"**Predicted Sales Value:** ${prediction:,.2f}")
+                    
+                    with col2:
+                        high_prob = probabilities[1] * 100
+                        st.metric(
+                            "High Sales Probability",
+                            f"{high_prob:.1f}%"
+                        )
+                    
+                    with col3:
+                        low_prob = probabilities[0] * 100
+                        st.metric(
+                            "Low Sales Probability",
+                            f"{low_prob:.1f}%"
+                        )
+                    
+                    # Probability visualization
+                    st.markdown("---")
+                    st.subheader("📈 Prediction Confidence")
+                    
+                    prob_data = pd.DataFrame({
+                        'Category': ['Low Sales', 'High Sales'],
+                        'Probability': [probabilities[0] * 100, probabilities[1] * 100]
+                    })
+                    
+                    fig = px.bar(
+                        prob_data,
+                        x='Category',
+                        y='Probability',
+                        title='Sales Category Probabilities',
+                        color='Category',
+                        color_discrete_map={'Low Sales': '#FF6B6B', 'High Sales': '#4ECDC4'},
+                        text='Probability',
+                        texttemplate='%{text:.1f}%'
+                    )
+                    fig.update_layout(height=400, yaxis_title='Probability (%)', yaxis_range=[0, 100])
+                    fig.update_traces(textposition='outside')
+                    st.plotly_chart(fig, use_container_width=True)
                     
                     # Feature summary
                     st.markdown("---")
-                    st.subheader("🔍 Feature Analysis")
-                    
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        with st.expander("📋 View Raw Features"):
-                            st.json({k: round(v, 4) for k, v in list(features_dict.items())[:20]})
-                            st.caption(f"Total features extracted: {len(features_dict)}")
-                    
-                    with col2:
-                        with st.expander("📊 View Scaled Features (After Scaler)"):
-                            # Show scaled features
-                            scaled_features_dict = {keep_cols[i]: round(X_scaled[0][i], 4) for i in range(min(20, len(keep_cols)))}
-                            st.json(scaled_features_dict)
-                            st.caption(f"Features scaled using StandardScaler (scaler.pkl)")
-                            st.info("💡 Features are normalized (mean=0, std=1) before model prediction")
-                    
-                    # Scaler information
-                    st.markdown("---")
-                    with st.expander("⚙️ Scaler Information"):
-                        st.markdown("""
-                        **StandardScaler (scaler.pkl)**
-                        
-                        The scaler normalizes features before feeding them to the models:
-                        - **Mean normalization**: Centers features around 0
-                        - **Standard deviation scaling**: Scales features to unit variance
-                        - **Formula**: `scaled = (value - mean) / std`
-                        
-                        This ensures all features are on the same scale, which is important for:
-                        - Linear models (Ridge, Logistic Regression)
-                        - Neural networks
-                        - Better model performance and convergence
-                        """)
-                        
-                        if scaler:
-                            st.success("✅ Scaler loaded successfully")
-                            st.caption(f"Scaler type: {type(scaler).__name__}")
-                            if hasattr(scaler, 'mean_') and scaler.mean_ is not None:
-                                st.caption(f"Number of features scaled: {len(scaler.mean_)}")
-                        else:
-                            st.error("❌ Scaler not available")
+                    with st.expander("🔍 View Extracted Features"):
+                        st.json({k: round(v, 4) for k, v in list(features_dict.items())[:20]})
+                        st.caption(f"Total features extracted: {len(features_dict)}")
                     
                 except Exception as e:
                     st.error(f"Error processing image: {e}")
