@@ -23,7 +23,10 @@ This project uses **Machine Learning** to analyze visual features of protein pro
   - Feature importance analysis
   - SHAP value explanations
   - Permutation importance
-  - Interactive Streamlit dashboard
+  - Interactive Streamlit dashboards (2 apps)
+  - Model selection interface
+  - Real-time image classification testing
+  - Validation accuracy visualizations
 
 ## 🚀 Quick Start
 
@@ -37,7 +40,7 @@ source protein_env/bin/activate  # On macOS/Linux
 protein_env\Scripts\activate  # On Windows
 
 # Install dependencies
-pip install -r requirements_protein.txt
+pip install -r requirements.txt
 ```
 
 ### 2. Run Jupyter Notebook
@@ -46,14 +49,34 @@ pip install -r requirements_protein.txt
 jupyter notebook ProteinData.ipynb
 ```
 
-### 3. Run Streamlit App
+### 3. Run Streamlit Apps
+
+The project includes two Streamlit applications:
+
+**A. Visualization Dashboard** (`Streamlit_Dashboard.py`)
+- Displays saved charts and visualizations from analysis
+- Interactive data exploration
+- Product label classification testing page
+- Model selection and performance metrics
 
 ```bash
 streamlit run Streamlit_Dashboard.py
 ```
-Or Use the deployed app - https://mohini-workday-protein-product-sales-streamlit-dashboard-hvldbs.streamlit.app/
 
-Or use the setup script:
+**B. Sales Predictor** (`ProteinSalesPredictor.py`)
+- Upload product images for sales prediction
+- Real-time feature extraction
+- Model selection (Ridge, Random Forest, XGBoost)
+- SHAP analysis and feature importance
+- Comprehensive performance metrics
+
+```bash
+streamlit run ProteinSalesPredictor.py
+```
+
+**Deployed App**: https://mohini-workday-protein-product-sales-streamlit-dashboard-hvldbs.streamlit.app/
+
+**Or use the setup script:**
 
 ```bash
 ./setup_venv.sh
@@ -63,19 +86,26 @@ Or use the setup script:
 
 ```
 MainProject/
-├── ProteinData.ipynb          # Main analysis notebook
-├── Streamlit.py               # Interactive web application
-├── requirements_protein.txt   # Python dependencies
-├── setup_venv.sh             # Setup script
-├── ml_outputs/               # Trained models and outputs
-│   ├── rf_reg.py             # Random Forest Regressor
-│   ├── xgb_reg.py            # XGBoost Regressor
-│   ├── rf_clf.py             # Random Forest Classifier
-│   ├── scaler.py             # Feature scaler
-│   └── feature_table_with_metadata.csv
-├── ProteinProductImages/      # Product label images
-├── ProteinProducts.xlsx       # Product metadata
+├── ProteinData.ipynb              # Main analysis notebook
+├── Streamlit_Dashboard.py         # Visualization dashboard app
+├── ProteinSalesPredictor.py       # Sales prediction app
+├── requirements.txt               # Python dependencies
+├── setup_venv.sh                  # Setup script
+├── save_models_as_pkl.py          # Model serialization script
+├── ml_outputs/                    # Trained models and outputs
+│   ├── rf_reg.pkl                 # Random Forest Regressor
+│   ├── xgb_reg.pkl                # XGBoost Regressor
+│   ├── rf_clf.pkl                 # Random Forest Classifier
+│   ├── scaler.pkl                 # Feature scaler
+│   ├── feature_table_with_metadata.csv
+│   ├── merged_embeddings.csv
+│   └── *.png                      # Visualization charts
+├── ProteinProductImages/          # Product label images
+├── ProteinProducts.xlsx           # Product metadata
+├── ValidationAccuracy.png          # Model validation visualization
 └── Documentation/
+    ├── APP_INSTRUCTIONS.md         # Application usage guide
+    ├── STREAMLIT_EXPLANATION.md    # Streamlit app details
     ├── FEATURE_VISUALIZATION_GUIDE.md
     ├── GRAPH_INTERPRETATION_GUIDE.md
     └── QUICK_GRAPH_SUMMARY.md
@@ -94,15 +124,32 @@ MainProject/
 
 ## 🎯 Model Performance
 
-- **Random Forest Regressor**: Best R² score
-- **XGBoost Regressor**: Excellent performance
-- **Random Forest Classifier**: High accuracy for high/low sales prediction
+- **Random Forest Regressor**: Best R² score for sales prediction
+- **XGBoost Regressor**: Excellent performance with gradient boosting
+- **Ridge Regression**: Linear baseline model (auto-trained if needed)
+- **Random Forest Classifier**: High accuracy for high/low sales classification
+- **XGBoost Classifier**: Advanced classification performance
+- **Logistic Regression**: Binary classification baseline
+
+See `ValidationAccuracy.png` for detailed validation metrics.
 
 ## 📚 Documentation
 
+- `APP_INSTRUCTIONS.md` - Detailed guide for using the Streamlit applications
+- `STREAMLIT_EXPLANATION.md` - Technical details about the Streamlit apps
 - `FEATURE_VISUALIZATION_GUIDE.md` - Guide to feature extraction visualizations
 - `GRAPH_INTERPRETATION_GUIDE.md` - Detailed interpretation of all graphs
 - `QUICK_GRAPH_SUMMARY.md` - Quick reference for graph conclusions
+
+## 🔄 Recent Updates
+
+- ✅ Added model selection feature to Testing page
+- ✅ Enhanced error handling for missing model files
+- ✅ Added scaler.pkl information display
+- ✅ Fixed matplotlib import error for Streamlit Cloud deployment
+- ✅ Added ValidationAccuracy.png visualization
+- ✅ Improved dynamic path resolution for deployment
+- ✅ Added comprehensive feature extraction pipeline
 
 ## 👤 Author
 
